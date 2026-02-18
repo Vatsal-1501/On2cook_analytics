@@ -1,0 +1,1639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>On2Cook Device Analytics | Smart Cooking Intelligence</title>
+    <meta name="description" content="Real-time analytics dashboard for On2Cook smart cooking devices.">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        dark: { 900: '#0a0f1a', 800: '#111827', 700: '#1f2937', 600: '#374151' },
+                        accent: { cyan: '#06b6d4', blue: '#3b82f6', emerald: '#10b981', orange: '#f97316', red: '#ef4444', purple: '#8b5cf6' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .chart-container { position: relative; height: 280px; width: 100%; }
+        .glass-card { 
+            background: linear-gradient(135deg, rgba(17,24,39,0.95) 0%, rgba(31,41,55,0.9) 100%);
+            border: 1px solid rgba(255,255,255,0.08);
+            backdrop-filter: blur(12px);
+        }
+        .file-badge { 
+            display: inline-flex; 
+            align-items: center; 
+            padding: 0.375rem 0.75rem; 
+            border-radius: 9999px; 
+            font-size: 0.75rem; 
+            font-weight: 500; 
+            background-color: #1f2937; 
+            color: #d1d5db; 
+            border: 1px solid #374151; 
+            margin-right: 0.5rem; 
+            margin-bottom: 0.5rem;
+        }
+        .file-error { background-color: rgba(127, 29, 29, 0.3); color: #f87171; border-color: #7f1d1d; }
+        .file-success { background-color: rgba(6, 78, 59, 0.3); color: #6ee7b7; border-color: #065f46; }
+        #debug { 
+            background-color: #0a0f1a; 
+            color: #10b981; 
+            padding: 1rem; 
+            border-radius: 0.75rem; 
+            font-family: monospace; 
+            font-size: 0.75rem; 
+            max-height: 15rem; 
+            overflow: auto; 
+            border: 1px solid #374151;
+        }
+        .ingredient-badge { 
+            display: inline-flex; 
+            align-items: center; 
+            padding: 0.375rem 0.75rem; 
+            border-radius: 0.5rem; 
+            font-size: 0.75rem; 
+            font-weight: 500; 
+            background: linear-gradient(to right, rgba(120, 53, 15, 0.4), rgba(124, 45, 18, 0.3)); 
+            color: #fcd34d; 
+            border: 1px solid rgba(217, 119, 6, 0.3); 
+            margin-right: 0.5rem; 
+            margin-bottom: 0.5rem;
+        }
+        .ingredient-card {
+            padding: 1rem; 
+            border-radius: 0.75rem; 
+            background-color: rgba(31, 41, 55, 0.5); 
+            border: 1px solid rgba(217, 119, 6, 0.2); 
+            transition: all 150ms;
+        }
+        .ingredient-card:hover { border-color: rgba(217, 119, 6, 0.4); }
+        .recipe-ingredient-header {
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; 
+            padding: 0.75rem; 
+            background: linear-gradient(to right, rgba(120, 53, 15, 0.3), rgba(124, 45, 18, 0.2)); 
+            border-radius: 0.5rem; 
+            border: 1px solid rgba(217, 119, 6, 0.3); 
+            cursor: pointer; 
+            transition: all 150ms;
+        }
+        .recipe-ingredient-header:hover { border-color: rgba(217, 119, 6, 0.5); }
+        .aggregated-row:nth-child(odd) { background: rgba(251, 191, 36, 0.05); }
+        .aggregated-row:hover { background: rgba(251, 191, 36, 0.1); }
+        #recipeFileList { display: none; }
+    </style>
+</head>
+<body class="bg-dark-900 min-h-screen text-gray-100">
+
+    <!-- Header -->
+    <header class="border-b border-dark-600 bg-dark-800/80 backdrop-blur-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+                    <i class="fas fa-fire-burner text-white text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">On2Cook Analytics</h1>
+                    <p class="text-gray-500 text-sm">Restaurant Device Intelligence Platform</p>
+                </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-4">
+                <div class="flex items-center gap-2 text-sm">
+                    <label class="text-gray-400">Electricity Rate:</label>
+                    <input type="number" id="electricityRate" value="6.5" step="0.1" min="0" class="w-20 px-2 py-1.5 bg-dark-700 border border-dark-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500">
+                    <span class="text-gray-500">₹/kWh</span>
+                </div>
+                <input type="file" id="fileInput" multiple accept=".txt" class="hidden">
+                <button id="reloadLogs" class="cursor-pointer bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-4 py-3 rounded-xl shadow-lg transition-all duration-300 flex items-center gap-2 font-semibold" title="Reload logs from logs/ folder">
+                    <i class="fas fa-rotate-right"></i> Reload
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-8">
+        <!-- File Status (hidden, kept for JS compatibility) -->
+        <div id="fileList" class="hidden"></div>
+        <div id="recipeFileList" class="hidden"></div>
+
+        <!-- KPI Dashboard -->
+        <div class="mb-8">
+            <h2 class="text-lg font-semibold text-gray-200 mb-4 flex items-center gap-3">
+                <i class="fas fa-chart-line text-emerald-400"></i>
+                Business Intelligence
+            </h2>
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div class="glass-card p-4 rounded-xl text-center border-l-4 border-cyan-500">
+                    <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Total Run Time</div>
+                    <div id="kpi-runtime" class="text-2xl font-bold text-cyan-400">0s</div>
+                </div>
+                <div class="glass-card p-4 rounded-xl text-center border-l-4 border-emerald-500">
+                    <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Recipes Completed</div>
+                    <div id="kpi-completed" class="text-2xl font-bold text-emerald-400">0</div>
+                </div>
+                <div class="glass-card p-4 rounded-xl text-center border-l-4 border-orange-500">
+                    <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Recipes Aborted</div>
+                    <div id="kpi-aborted" class="text-2xl font-bold text-orange-400">0</div>
+                </div>
+                <div class="glass-card p-4 rounded-xl text-center border-l-4 border-purple-500">
+                    <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Energy Used</div>
+                    <div id="kpi-energy" class="text-2xl font-bold text-purple-400">0 kWh</div>
+                </div>
+                <div class="glass-card p-4 rounded-xl text-center border-l-4 border-red-500">
+                    <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Electricity Cost</div>
+                    <div id="kpi-cost" class="text-2xl font-bold text-red-400">₹0</div>
+                </div>
+                <div class="glass-card p-4 rounded-xl text-center border-l-4 border-blue-500">
+                    <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Avg Power</div>
+                    <div id="kpi-avgpower" class="text-2xl font-bold text-blue-400">0 W</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ingredients Dashboard -->
+        <div class="mb-8 glass-card rounded-2xl p-6 border-l-4 border-amber-500">
+            <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+                <h2 class="text-lg font-semibold text-gray-200 flex items-center gap-3">
+                    <i class="fas fa-leaf text-amber-400"></i>
+                    Ingredients Usage Tracker
+                    <span class="text-xs text-gray-500 font-normal">(Aggregated by Run Count)</span>
+                </h2>
+                <div class="flex flex-wrap gap-3">
+                    <button id="exportIngredientsCSV" class="px-4 py-2 glass-card rounded-lg hover:border-emerald-500/40 transition text-sm flex items-center gap-2">
+                        <i class="fas fa-file-csv text-emerald-400"></i> Export Aggregated CSV
+                    </button>
+                    <button id="exportIngredientsPDF" class="px-4 py-2 glass-card rounded-lg hover:border-blue-500/40 transition text-sm flex items-center gap-2">
+                        <i class="fas fa-file-alt text-blue-400"></i> Export Text Report
+                    </button>
+                </div>
+            </div>
+
+            <!-- Ingredients Summary -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="text-center p-4 rounded-xl bg-dark-700/50 border border-amber-500/20">
+                    <div class="text-2xl font-bold text-amber-400" id="ing-total-recipes">0</div>
+                    <div class="text-xs text-gray-500 mt-1 uppercase">Preloaded Recipes</div>
+                </div>
+                <div class="text-center p-4 rounded-xl bg-dark-700/50 border border-orange-500/20">
+                    <div class="text-2xl font-bold text-orange-400" id="ing-total-items">0</div>
+                    <div class="text-xs text-gray-500 mt-1 uppercase">Unique Ingredients</div>
+                </div>
+                <div class="text-center p-4 rounded-xl bg-dark-700/50 border border-emerald-500/20">
+                    <div class="text-2xl font-bold text-emerald-400" id="ing-matched">0</div>
+                    <div class="text-xs text-gray-500 mt-1 uppercase">Matched Recipes</div>
+                </div>
+                <div class="text-center p-4 rounded-xl bg-dark-700/50 border border-red-500/20">
+                    <div class="text-2xl font-bold text-red-400" id="ing-unmatched">0</div>
+                    <div class="text-xs text-gray-500 mt-1 uppercase">Unmatched Recipes</div>
+                </div>
+            </div>
+
+            <!-- Aggregated Ingredients Table -->
+            <div class="mb-6">
+                <h3 class="text-sm font-semibold text-amber-300 mb-3 flex items-center gap-2">
+                    <i class="fas fa-calculator"></i> Total Ingredients Used (Aggregated)
+                </h3>
+                <div class="overflow-x-auto overflow-y-auto max-h-96 rounded-xl border border-dark-600">
+                    <table class="w-full text-sm">
+                        <thead class="bg-dark-800 text-xs uppercase text-gray-400 sticky top-0">
+                            <tr>
+                                <th class="px-4 py-3 text-left">Ingredient</th>
+                                <th class="px-4 py-3 text-right">Quantity</th>
+                                <th class="px-4 py-3 text-left">Unit</th>
+                                <th class="px-4 py-3 text-right">Recipe Runs</th>
+                                <th class="px-4 py-3 text-left">Used In Recipes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="aggregated-ingredients" class="text-gray-300">
+                            <tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">Loading log data...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Ingredients List by Recipe -->
+            <details class="mt-4">
+                <summary class="cursor-pointer text-sm text-gray-400 hover:text-gray-200 flex items-center gap-2 p-2">
+                    <i class="fas fa-chevron-right"></i> View Breakdown by Recipe
+                </summary>
+                <div id="ingredients-container" class="space-y-4 mt-4 max-h-[600px] overflow-y-auto">
+                    <p class="text-gray-500 text-sm text-center py-8">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        Loading log data...
+                    </p>
+                </div>
+            </details>
+        </div>
+
+        <!-- Recipe Analytics -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div class="glass-card rounded-2xl p-5">
+                <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+                    <i class="fas fa-fire text-orange-400"></i> Top Recipes by Count
+                </h3>
+                <div id="top-recipes" class="space-y-3 max-h-64 overflow-y-auto">
+                    <p class="text-gray-500 text-sm">No recipe data available</p>
+                </div>
+            </div>
+
+            <div class="glass-card rounded-2xl p-5">
+                <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+                    <i class="fas fa-clock text-cyan-400"></i> Time Spent per Recipe
+                </h3>
+                <div id="recipe-time" class="space-y-3 max-h-64 overflow-y-auto">
+                    <p class="text-gray-500 text-sm">No recipe data available</p>
+                </div>
+            </div>
+
+            <div class="glass-card rounded-2xl p-5">
+                <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+                    <i class="fas fa-tasks text-emerald-400"></i> Recipe Execution Stats
+                </h3>
+                <div id="recipe-stats" class="space-y-4">
+                    <p class="text-gray-500 text-sm">No recipe data available</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Operational Time Analysis -->
+        <div class="glass-card rounded-2xl p-5 mb-8">
+            <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-4 flex items-center gap-2">
+                <i class="fas fa-clock"></i> Operational Time Analysis
+            </h3>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div class="text-center p-4 rounded-xl bg-dark-700/50 border border-cyan-500/20">
+                    <div class="text-2xl font-bold text-cyan-400" id="time-induction">0s</div>
+                    <div class="text-xs text-gray-500 mt-1 uppercase">Induction ON</div>
+                    <div class="text-xs text-cyan-500/60 mt-1" id="time-induction-pct">0%</div>
+                </div>
+                <div class="text-center p-4 rounded-xl bg-dark-700/50 border border-orange-500/20">
+                    <div class="text-2xl font-bold text-orange-400" id="time-magnetron">0s</div>
+                    <div class="text-xs text-gray-500 mt-1 uppercase">Microwave ON</div>
+                    <div class="text-xs text-orange-500/60 mt-1" id="time-magnetron-pct">0%</div>
+                </div>
+                <div class="text-center p-4 rounded-xl bg-dark-700/50 border border-blue-500/20">
+                    <div class="text-2xl font-bold text-blue-400" id="time-recipe">0s</div>
+                    <div class="text-xs text-gray-500 mt-1 uppercase">Recipe Mode</div>
+                    <div class="text-xs text-blue-500/60 mt-1" id="time-recipe-pct">0%</div>
+                </div>
+                <div class="text-center p-4 rounded-xl bg-dark-700/50 border border-emerald-500/20">
+                    <div class="text-2xl font-bold text-emerald-400" id="time-manual">0s</div>
+                    <div class="text-xs text-gray-500 mt-1 uppercase">Manual Mode</div>
+                    <div class="text-xs text-emerald-500/60 mt-1" id="time-manual-pct">0%</div>
+                </div>
+                <div class="text-center p-4 rounded-xl bg-dark-700/50 border border-gray-500/20">
+                    <div class="text-2xl font-bold text-gray-400" id="time-idle">0s</div>
+                    <div class="text-xs text-gray-500 mt-1 uppercase">Idle Time</div>
+                    <div class="text-xs text-gray-500/60 mt-1" id="time-idle-pct">0%</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Power Details -->
+        <div class="glass-card rounded-2xl p-5 mb-8">
+            <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+                <i class="fas fa-bolt text-yellow-400"></i> Power & Energy Details
+            </h3>
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div class="text-center p-3 rounded-lg bg-dark-700/50">
+                    <div class="text-xs text-gray-500 uppercase mb-1">Total Current Draw</div>
+                    <div id="power-total-current" class="text-xl font-bold text-cyan-400">0 A·h</div>
+                </div>
+                <div class="text-center p-3 rounded-lg bg-dark-700/50">
+                    <div class="text-xs text-gray-500 uppercase mb-1">Induction Energy</div>
+                    <div id="power-ind-energy" class="text-xl font-bold text-blue-400">0 Wh</div>
+                </div>
+                <div class="text-center p-3 rounded-lg bg-dark-700/50">
+                    <div class="text-xs text-gray-500 uppercase mb-1">Magnetron Energy</div>
+                    <div id="power-mag-energy" class="text-xl font-bold text-orange-400">0 Wh</div>
+                </div>
+                <div class="text-center p-3 rounded-lg bg-dark-700/50">
+                    <div class="text-xs text-gray-500 uppercase mb-1">Peak Power</div>
+                    <div id="power-peak" class="text-xl font-bold text-red-400">0 W</div>
+                </div>
+                <div class="text-center p-3 rounded-lg bg-dark-700/50">
+                    <div class="text-xs text-gray-500 uppercase mb-1">Avg Ind Current</div>
+                    <div id="stat-avg-ind" class="text-xl font-bold text-cyan-400">0 A</div>
+                </div>
+                <div class="text-center p-3 rounded-lg bg-dark-700/50">
+                    <div class="text-xs text-gray-500 uppercase mb-1">Avg Mag Current</div>
+                    <div id="stat-avg-mag" class="text-xl font-bold text-orange-400">0 A</div>
+                </div>
+                <div class="text-center p-3 rounded-lg bg-dark-700/50">
+                    <div class="text-xs text-gray-500 uppercase mb-1">Peak Voltage</div>
+                    <div id="power-peak-voltage" class="text-xl font-bold text-purple-400">— V</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Remaining Charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div class="glass-card rounded-2xl p-6">
+                <h3 class="text-lg font-semibold text-gray-200 mb-4 flex items-center gap-3">
+                    <i class="fas fa-chart-pie text-emerald-400"></i>
+                    Recipe Distribution
+                </h3>
+                <div class="chart-container flex items-center justify-center">
+                    <canvas id="recipeChart"></canvas>
+                </div>
+            </div>
+
+            <div class="glass-card rounded-2xl p-6">
+                <h3 class="text-lg font-semibold text-gray-200 mb-4 flex items-center gap-3">
+                    <i class="fas fa-chart-bar text-blue-400"></i>
+                    Operational Mode Distribution
+                </h3>
+                <div class="chart-container flex items-center justify-center">
+                    <canvas id="modeChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tools -->
+        <div class="mb-6 flex flex-wrap items-center gap-3">
+            <button id="clearCharts" class="px-5 py-2.5 glass-card rounded-lg hover:border-red-500/40 transition text-sm flex items-center gap-2">
+                <i class="fas fa-trash-can text-red-400"></i> Clear All Data
+            </button>
+            <button id="exportReport" class="px-5 py-2.5 glass-card rounded-lg hover:border-emerald-500/40 transition text-sm flex items-center gap-2">
+                <i class="fas fa-file-export text-emerald-400"></i> Export Full Report
+            </button>
+        </div>
+
+        <!-- Raw Data Table -->
+        <details class="glass-card rounded-2xl">
+            <summary class="p-5 cursor-pointer font-semibold text-gray-200 flex items-center gap-3 hover:bg-dark-700/50 rounded-t-2xl transition">
+                <i class="fas fa-table text-blue-400"></i> Raw Data (Latest 100 samples)
+            </summary>
+            <div class="p-5 overflow-x-auto border-t border-dark-600">
+                <table id="dataTable" class="w-full text-sm text-left">
+                    <thead class="text-xs uppercase text-gray-500 border-b border-dark-600">
+                        <tr>
+                            <th class="px-3 py-3">Time</th>
+                            <th class="px-3 py-3">Recipe</th>
+                            <th class="px-3 py-3">Step</th>
+                            <th class="px-3 py-3">Ind (A)</th>
+                            <th class="px-3 py-3">Mag (A)</th>
+                            <th class="px-3 py-3">Power (W)</th>
+                            <th class="px-3 py-3">Mode</th>
+                            <th class="px-3 py-3">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="text-gray-300"></tbody>
+                </table>
+            </div>
+        </details>
+
+        <footer class="mt-12 pt-6 border-t border-dark-700 text-center text-gray-500 text-sm">
+            <p>On2Cook Device Analytics Platform • Restaurant Cooking Intelligence</p>
+        </footer>
+    </main>
+
+<script>
+// ==================== CONFIGURATION ====================
+const CONFIG = {
+    SAMPLE_INTERVAL: 1,           // seconds
+    INDUCTION_THRESHOLD: 1,       // Amps
+    MAGNETRON_THRESHOLD: 5,       // Amps
+    IND_MAX_POWER: 2000,          // Watts @ 100%
+    MAG_MAX_POWER: 800,           // Watts @ 100%
+    DEFAULT_VOLTAGE: 215,         // fallback if no voltage in log
+    RECIPE_FOLDER: 'recipes/',    // folder containing recipe JSON files
+    LOGS_FOLDER: 'logs/'          // folder containing device log .txt files
+};
+
+// ==================== AUTO-DETECTED LOGS ====================
+// These files are auto-loaded from the logs/ folder on page load.
+// To add a new log file, just drop it in the logs/ folder.
+// The dashboard will discover and load all .txt files automatically
+// via the file list below — update this array when you add new logs:
+const PRELOADED_LOGS = [
+    // Days 1-13 (Will contain 1 aborted session each)
+    'recipe_log_01_10_25.txt', 'recipe_log_02_10_25.txt', 'recipe_log_03_10_25.txt',
+    'recipe_log_04_10_25.txt', 'recipe_log_05_10_25.txt', 'recipe_log_06_10_25.txt',
+    'recipe_log_07_10_25.txt', 'recipe_log_08_10_25.txt', 'recipe_log_09_10_25.txt',
+    'recipe_log_10_10_25.txt', 'recipe_log_11_10_25.txt', 'recipe_log_12_10_25.txt',
+    'recipe_log_13_10_25.txt', 
+    // Remaining Days (All completed)
+    'recipe_log_14_10_25.txt', 'recipe_log_15_10_25.txt', 'recipe_log_16_10_25.txt',
+    'recipe_log_17_10_25.txt', 'recipe_log_18_10_25.txt', 'recipe_log_19_10_25.txt',
+    'recipe_log_20_10_25.txt',
+    // Manual Mode Days
+    'manual_log_21_10_25.txt', 'manual_log_22_10_25.txt', 'manual_log_23_10_25.txt',
+    'manual_log_24_10_25.txt', 'manual_log_25_10_25.txt', 'manual_log_26_10_25.txt',
+    'manual_log_27_10_25.txt', 'manual_log_28_10_25.txt', 'manual_log_29_10_25.txt',
+    'manual_log_30_10_25.txt'
+];
+
+// List of recipe files to preload (add your recipe file names here)
+const PRELOADED_RECIPES = [
+    'AFGHANI MUTTON.txt',
+    // Add more recipe files here as needed:
+    'BUTTER CHICKEN.txt',
+    'CHICKEN CURRY.txt',
+    'TOMATO SOUP.txt',
+    // 'DAL_MAKHANI.txt',
+];
+
+// ==================== STATE ====================
+let allData = [];
+let recipeData = [];
+let chartInstances = {};
+let recipeFilesData = {}; // Store loaded recipe files: { recipeName: { ingredients: [...], ... } }
+let aggregatedIngredients = {}; // { ingredientName: { quantity: number, unit: string, recipes: Set, runs: number } }
+
+// ==================== CHART DEFAULTS ====================
+Chart.defaults.color = '#9ca3af';
+Chart.defaults.borderColor = 'rgba(255,255,255,0.05)';
+Chart.defaults.font.family = 'Inter';
+
+// ==================== EVENT LISTENERS ====================
+document.getElementById('fileInput').addEventListener('change', handleFiles);
+document.getElementById('electricityRate').addEventListener('change', updateCostCalculations);
+document.getElementById('clearCharts').addEventListener('click', clearAllData);
+document.getElementById('exportReport').addEventListener('click', exportReport);
+document.getElementById('exportIngredientsCSV').addEventListener('click', exportIngredientsCSV);
+document.getElementById('exportIngredientsPDF').addEventListener('click', exportIngredientsText);
+document.getElementById('reloadLogs').addEventListener('click', () => {
+    allData = [];
+    recipeData = [];
+    aggregatedIngredients = {};
+    Object.values(chartInstances).forEach(c => c?.destroy());
+    chartInstances = {};
+    autoLoadLogs();
+});
+
+// ==================== AUTO-LOAD LOGS ON PAGE LOAD ====================
+document.addEventListener('DOMContentLoaded', async () => {
+    await preloadRecipes();
+    await autoLoadLogs();
+});
+
+// ==================== AUTO-LOAD LOGS FROM logs/ FOLDER ====================
+async function autoLoadLogs() {
+    const fileListEl = document.getElementById('fileList');
+    fileListEl.innerHTML = '<i class="fas fa-circle-notch fa-spin text-cyan-400 text-xl"></i> <span class="text-gray-400 ml-2">Loading logs from <code class="text-cyan-300">logs/</code> folder...</span>';
+
+    if (PRELOADED_LOGS.length === 0) {
+        fileListEl.innerHTML = `
+            <span class="text-amber-400 text-sm">
+                <i class="fas fa-folder-open mr-2"></i>
+                No log files configured. Add filenames to <code class="bg-dark-700 px-1 rounded">PRELOADED_LOGS</code> array in the script,
+                or use the <strong>Upload Logs</strong> button above.
+            </span>`;
+        return;
+    }
+
+    allData = [];
+    recipeData = [];
+    let loadedCount = 0;
+    let failedCount = 0;
+    const badges = [];
+
+    for (const fileName of PRELOADED_LOGS) {
+        try {
+            const response = await fetch(CONFIG.LOGS_FOLDER + fileName);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const text = await response.text();
+            const isRecipeFile = fileName.toLowerCase().includes('recipe');
+            const parsed = parseDeviceLog(text, fileName, isRecipeFile);
+
+            allData.push(...parsed);
+            loadedCount++;
+            badges.push(`<span class="file-badge file-success"><i class="fas fa-check-circle mr-2"></i>${fileName} <span class="ml-2 text-emerald-300">(${parsed.length} rows)</span></span>`);
+        } catch (err) {
+            failedCount++;
+            console.error(`Error loading log ${fileName}:`, err);
+            badges.push(`<span class="file-badge file-error"><i class="fas fa-exclamation-circle mr-2"></i>${fileName} — Not found</span>`);
+        }
+    }
+
+    fileListEl.innerHTML = badges.join('') || '<span class="text-gray-500 text-sm">No logs loaded</span>';
+
+    if (allData.length > 0) {
+        allData.sort((a, b) => a.timestamp - b.timestamp);
+        processRecipeSessions();
+        updateAllCharts();
+        updateIngredientsDisplay();
+    } else if (loadedCount === 0) {
+        fileListEl.innerHTML += `<span class="text-red-400 text-sm ml-2"><i class="fas fa-exclamation-triangle mr-1"></i>Could not load any log files. Check that the <code class="bg-dark-700 px-1 rounded">logs/</code> folder exists alongside this HTML file.</span>`;
+    }
+}
+
+async function preloadRecipes() {
+    const fileListEl = document.getElementById('recipeFileList');
+    fileListEl.innerHTML = '<i class="fas fa-circle-notch fa-spin text-amber-400 text-xl"></i> <span class="text-gray-400 ml-2">Loading preloaded recipes...</span>';
+
+    let loadedCount = 0;
+    let failedCount = 0;
+
+    for (const fileName of PRELOADED_RECIPES) {
+        try {
+            const response = await fetch(CONFIG.RECIPE_FOLDER + fileName);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            
+            const text = await response.text();
+            const recipeName = normalizeRecipeName(fileName.replace(/\.(txt|json)$/i, ''));
+            const recipeJson = JSON.parse(text);
+            
+            recipeFilesData[recipeName] = {
+                fileName: fileName,
+                ingredients: recipeJson.Ingredients || [],
+                instructions: recipeJson.Instruction || []
+            };
+            
+            loadedCount++;
+        } catch (err) {
+            failedCount++;
+            console.error(`Error loading recipe ${fileName}:`, err);
+        }
+    }
+
+    // Update UI to show loaded recipes
+    if (loadedCount > 0) {
+        fileListEl.innerHTML = Object.entries(recipeFilesData).map(([name, data]) => 
+            `<span class="file-badge file-success"><i class="fas fa-check-circle mr-2 text-amber-400"></i>${data.fileName} <span class="ml-1 text-amber-300">(${data.ingredients.length} steps)</span></span>`
+        ).join('');
+    } else {
+        fileListEl.innerHTML = '<span class="text-gray-500 text-sm"><i class="fas fa-utensils mr-2 text-amber-500"></i>No recipe files found in recipes/ folder</span>';
+    }
+
+    // Update the preloaded count
+    document.getElementById('ing-total-recipes').textContent = loadedCount;
+}
+
+function normalizeRecipeName(name) {
+    // Normalize recipe name for matching: uppercase, replace spaces with underscores
+    return name.toUpperCase().replace(/\s+/g, '_').replace(/-/g, '_');
+}
+
+function findMatchingRecipeFile(recipeName) {
+    const normalizedName = normalizeRecipeName(recipeName);
+    
+    // Try exact match first
+    if (recipeFilesData[normalizedName]) {
+        return recipeFilesData[normalizedName];
+    }
+    
+    // Try fuzzy match
+    for (const [key, value] of Object.entries(recipeFilesData)) {
+        if (key.includes(normalizedName) || normalizedName.includes(key)) {
+            return value;
+        }
+        // Try without underscores
+        const keyNoUnderscore = key.replace(/_/g, '');
+        const nameNoUnderscore = normalizedName.replace(/_/g, '');
+        if (keyNoUnderscore.includes(nameNoUnderscore) || nameNoUnderscore.includes(keyNoUnderscore)) {
+            return value;
+        }
+    }
+    
+    return null;
+}
+
+// ==================== INGREDIENT PARSING ====================
+function parseIngredientText(text) {
+    // Clean the text: remove colons, extra spaces, handle variations
+    
+    text = text.replace(/:/g, '').trim();
+    
+    const parsed = [];
+    // Improved regex to match multiple ingredients without requiring commas
+    // Matches patterns like "Chicken 500 gm" or "Ginger Garlic Paste 15gm" repeatedly
+    const regex = /([a-zA-Z\s]+?)\s*(\d+(?:\.\d+)?)\s*(g|gm|kg|ml|l|Nos|nos|pcs|piece|pieces)?/gi;
+    let match;
+    
+    while ((match = regex.exec(text)) !== null) {
+        const name = match[1].trim();
+        const quantity = parseFloat(match[2]);
+        const unit = (match[3] || 'g').toLowerCase().replace('gm', 'g').replace(/pieces?/i, 'nos').replace(/pcs/i, 'nos');
+        
+        // Skip water entirely
+        if (name.toLowerCase() === 'water') continue;
+        
+        parsed.push({
+            name: name,
+            quantity: quantity,
+            unit: unit
+        });
+    }
+    
+    // If no matches, fallback to original logic but skip water
+    if (parsed.length === 0 && text.toLowerCase() !== 'water') {
+        parsed.push({
+            name: text,
+            quantity: 0,
+            unit: ''
+        });
+    }
+    
+    return parsed;
+}
+
+// ==================== INGREDIENT NORMALIZATION ====================
+function normalizeIngredientName(name) {
+    if (!name) return '';
+
+    // Step 1: Aggressively remove the unwanted "m " / "M " prefix (most important fix)
+    name = name.replace(/^[mM]\s*/i, '').trim();
+
+    // Step 2: Lowercase + clean spaces
+    name = name.toLowerCase().trim();
+    name = name.replace(/\s+/g, ' ');
+
+    // Step 3: Standardize common suffixes
+    name = name.replace(/\s*paste$/i, ' paste')
+               .replace(/\s*powder$/i, ' powder');
+
+    // Step 4: Remove preparation adjectives / prefixes
+    const removeWords = [
+        'boiled', 'fresh', 'chopped', 'sliced', 'diced', 'minced',
+        'grated', 'crushed', 'whole', 'cleaned', 'cut'
+    ];
+    let words = name.split(' ').filter(w => !removeWords.includes(w));
+    name = words.join(' ');
+
+    // Step 5: Handle very common singular/plural variations
+    const pluralMap = {
+        'chillies': 'chilli',
+        'chilis': 'chilli',
+        'powders': 'powder',
+        'pastes': 'paste',
+        'leaves': 'leaf',
+        'cardamoms': 'cardamom',
+        'cloves': 'clove',
+        'garlics': 'garlic',
+        'onions': 'onion',
+        'curds': 'curd'
+    };
+
+    for (const [plural, singular] of Object.entries(pluralMap)) {
+        name = name.replace(new RegExp(plural + '$', 'i'), singular);
+    }
+
+    // Final safety: remove trailing 's' only if it looks safe
+    if (name.endsWith('s') && name.length > 5 && !name.endsWith('mas') && !name.endsWith('less')) {
+        name = name.slice(0, -1);
+    }
+
+    return name.trim();
+}
+
+function normalizeUnit(unit) {
+    // Normalize units for aggregation
+    unit = (unit || '').toLowerCase().trim();
+    if (unit === 'gm') return 'g';
+    if (unit === 'nos' || unit === 'pcs' || unit === 'piece' || unit === 'pieces') return 'nos';
+    if (unit === 'ml' || unit === 'l') return unit;
+    return unit || 'g';
+}
+
+// ==================== INGREDIENTS DISPLAY ====================
+function updateIngredientsDisplay() {
+    const container = document.getElementById('ingredients-container');
+    const aggregatedTable = document.getElementById('aggregated-ingredients');
+    
+    if (recipeData.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-sm text-center py-8"><i class="fas fa-info-circle mr-2"></i>No recipe sessions found in logs</p>';
+        aggregatedTable.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">No recipe sessions found in logs</td></tr>';
+        return;
+    }
+    
+    // Count recipe runs
+    const recipeCount = {};
+    recipeData.forEach(r => {
+        recipeCount[r.recipeName] = (recipeCount[r.recipeName] || 0) + 1;
+    });
+    
+    let matchedCount = 0;
+    let unmatchedCount = 0;
+    aggregatedIngredients = {}; // Reset aggregated data
+    
+    let html = '';
+    
+    Object.entries(recipeCount).sort((a, b) => b[1] - a[1]).forEach(([recipeName, runCount]) => {
+        const recipeFile = findMatchingRecipeFile(recipeName);
+        
+        if (recipeFile) {
+            matchedCount++;
+            const ingredients = recipeFile.ingredients;
+            
+            // Parse all individual ingredients from each step (from Ingredients array, not Instructions)
+            const parsedIngredients = [];
+            ingredients.forEach(step => {
+                if (step.text) {
+                    const items = parseIngredientText(step.text);
+                    items.forEach(item => {
+                        parsedIngredients.push({
+                            step: step.title || step.audioI || `Step ${step.id}`,
+                            ...item
+                        });
+                        
+                        // Aggregate ingredients across all runs
+                        const normalizedName = normalizeIngredientName(item.name);
+                        const unit = normalizeUnit(item.unit);
+                        const key = `${normalizedName}|${unit}`;
+                        
+                        if (!aggregatedIngredients[key]) {
+                            aggregatedIngredients[key] = {
+                                name: item.name,
+                                quantity: 0,
+                                unit: unit,
+                                recipes: new Set(),
+                                runs: 0
+                            };
+                        }
+                        
+                        // Multiply quantity by number of runs
+                        aggregatedIngredients[key].quantity += item.quantity * runCount;
+                        aggregatedIngredients[key].recipes.add(recipeName);
+                        aggregatedIngredients[key].runs += runCount;
+                    });
+                }
+            });
+            
+            html += `
+                <div class="ingredient-card" data-recipe="${recipeName}">
+                    <div class="recipe-ingredient-header" onclick="toggleIngredients('${recipeName.replace(/'/g, "\\'")}')">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-utensils text-amber-400"></i>
+                            <div>
+                                <span class="font-semibold text-white">${recipeName}</span>
+                                <span class="ml-2 px-2 py-0.5 rounded-full bg-emerald-900/50 text-emerald-400 text-xs">${runCount}x runs</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span class="text-sm text-amber-300">${parsedIngredients.length} ingredients</span>
+                            <i class="fas fa-chevron-down text-gray-400 transition-transform" id="chevron-${normalizeRecipeName(recipeName)}"></i>
+                        </div>
+                    </div>
+                    <div class="hidden mt-4 space-y-3" id="ingredients-${normalizeRecipeName(recipeName)}">
+                        <div class="text-xs text-gray-400 mb-2 bg-dark-800 p-2 rounded">
+                            <i class="fas fa-calculator mr-1"></i> Quantities shown are per single run. Total used = quantity × ${runCount} runs
+                        </div>
+                        ${ingredients.map(step => `
+                            <div class="p-3 rounded-lg bg-dark-800/50 border border-dark-600">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-amber-300">${step.title || step.audioI || 'Step ' + step.id}</span>
+                                    <span class="text-xs text-gray-400 bg-dark-700 px-2 py-1 rounded">${step.weight}</span>
+                                </div>
+                                <div class="flex flex-wrap gap-1.5">
+                                    ${step.text ? parseIngredientText(step.text).map(ing => `
+                                        <span class="ingredient-badge">${ing.name} <span class="text-amber-400 font-semibold">${ing.quantity > 0 ? ing.quantity + ' ' + ing.unit : ''}</span></span>
+                                    `).join('') : '<span class="text-gray-500 text-xs">No ingredients listed</span>'}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        } else {
+            unmatchedCount++;
+            html += `
+                <div class="ingredient-card opacity-60">
+                    <div class="flex items-center justify-between p-3">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-question-circle text-gray-500"></i>
+                            <div>
+                                <span class="font-semibold text-gray-400">${recipeName}</span>
+                                <span class="ml-2 px-2 py-0.5 rounded-full bg-gray-700 text-gray-400 text-xs">${runCount}x runs</span>
+                            </div>
+                        </div>
+                        <span class="text-sm text-red-400"><i class="fas fa-exclamation-triangle mr-1"></i>No recipe file found</span>
+                    </div>
+                </div>
+            `;
+        }
+    });
+    
+    container.innerHTML = html || '<p class="text-gray-500 text-sm text-center py-8">No recipes detected in logs</p>';
+    
+    // Update aggregated table
+    const sortedIngredients = Object.values(aggregatedIngredients)
+        .sort((a, b) => b.quantity - a.quantity);
+    
+    if (sortedIngredients.length > 0) {
+        aggregatedTable.innerHTML = sortedIngredients.map(ing => `
+            <tr class="aggregated-row border-b border-dark-700">
+                <td class="px-4 py-3 font-medium text-white">${ing.name}</td>
+                <td class="px-4 py-3 text-right font-bold text-amber-400">${ing.quantity.toFixed(ing.unit === 'nos' ? 0 : 1)}</td>
+                <td class="px-4 py-3 text-gray-400">${ing.unit}</td>
+                <td class="px-4 py-3 text-right text-emerald-400">${ing.runs}x</td>
+                <td class="px-4 py-3 text-xs text-gray-500">${[...ing.recipes].join(', ')}</td>
+            </tr>
+        `).join('');
+    }
+    
+    // Update summary stats
+    document.getElementById('ing-total-recipes').textContent = Object.keys(recipeFilesData).length;
+    document.getElementById('ing-total-items').textContent = sortedIngredients.length;
+    document.getElementById('ing-matched').textContent = matchedCount;
+    document.getElementById('ing-unmatched').textContent = unmatchedCount;
+}
+
+function toggleIngredients(recipeName) {
+    const normalizedName = normalizeRecipeName(recipeName);
+    const el = document.getElementById(`ingredients-${normalizedName}`);
+    const chevron = document.getElementById(`chevron-${normalizedName}`);
+    
+    if (el) {
+        el.classList.toggle('hidden');
+        if (chevron) {
+            chevron.classList.toggle('rotate-180');
+        }
+    }
+}
+
+// ==================== EXPORT INGREDIENTS ====================
+function exportIngredientsCSV() {
+    const ingredients = Object.values(aggregatedIngredients);
+    
+    if (ingredients.length === 0) {
+        alert('No ingredient data available.\nPlease ensure logs are loaded.');
+        return;
+    }
+    
+    // Create CSV with aggregated totals
+    let csv = 'Ingredient,Total Quantity,Unit,Total Runs,Used In Recipes\n';
+    
+    ingredients
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .forEach(ing => {
+            const recipes = [...ing.recipes].join('; ');
+            csv += `"${ing.name}",${ing.quantity.toFixed(ing.unit === 'nos' ? 0 : 1)},"${ing.unit}",${ing.runs},"${recipes}"\n`;
+        });
+    
+    downloadFile(csv, `on2cook-ingredients-aggregated-${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
+}
+
+function exportIngredientsText() {
+    const ingredients = Object.values(aggregatedIngredients);
+    
+    if (ingredients.length === 0) {
+        alert('No ingredient data available.\nPlease ensure logs are loaded.');
+        return;
+    }
+    
+    // Count recipe runs
+    const recipeCount = {};
+    recipeData.forEach(r => {
+        recipeCount[r.recipeName] = (recipeCount[r.recipeName] || 0) + 1;
+    });
+    
+    let report = `
+═══════════════════════════════════════════════════════════════════
+                ON2COOK INGREDIENTS USAGE REPORT
+                    (AGGREGATED TOTALS)
+═══════════════════════════════════════════════════════════════════
+Generated: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+
+SUMMARY
+-------
+Total Recipe Runs: ${recipeData.length}
+Unique Recipes: ${Object.keys(recipeCount).length}
+Total Unique Ingredients: ${ingredients.length}
+
+═══════════════════════════════════════════════════════════════════
+                    AGGREGATED INGREDIENTS
+═══════════════════════════════════════════════════════════════════
+
+`;
+    
+    ingredients
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .forEach(ing => {
+            const qty = ing.quantity.toFixed(ing.unit === 'nos' ? 0 : 1);
+            report += `• ${ing.name.padEnd(25)} ${qty.padStart(10)} ${ing.unit.padEnd(5)}  (${ing.runs}x runs)\n`;
+        });
+    
+    report += `
+
+═══════════════════════════════════════════════════════════════════
+                    BREAKDOWN BY RECIPE
+═══════════════════════════════════════════════════════════════════
+`;
+    
+    Object.entries(recipeCount)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([recipeName, count]) => {
+            const recipeFile = findMatchingRecipeFile(recipeName);
+            report += `\n📍 ${recipeName} (${count}x runs)\n`;
+            report += `${'─'.repeat(50)}\n`;
+            
+            if (recipeFile) {
+                recipeFile.ingredients.forEach(step => {
+                    if (step.text) {
+                        const items = parseIngredientText(step.text);
+                        items.forEach(item => {
+                            const totalQty = item.quantity * count;
+                            report += `   • ${item.name}: ${item.quantity} ${item.unit} × ${count} = ${totalQty.toFixed(1)} ${item.unit}\n`;
+                        });
+                    }
+                });
+            } else {
+                report += `   ⚠ No recipe file found\n`;
+            }
+        });
+    
+    report += `
+═══════════════════════════════════════════════════════════════════
+                         END OF REPORT
+═══════════════════════════════════════════════════════════════════
+Generated by On2Cook Analytics Platform
+`;
+    
+    downloadFile(report.trim(), `on2cook-ingredients-${new Date().toISOString().split('T')[0]}.txt`, 'text/plain');
+}
+
+function downloadFile(content, filename, mimeType) {
+    const blob = new Blob([content], { type: `${mimeType};charset=utf-8` });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+// ==================== FILE HANDLING (manual upload fallback) ====================
+async function handleFiles(e) {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+
+    const fileListEl = document.getElementById('fileList');
+    fileListEl.innerHTML = '<i class="fas fa-circle-notch fa-spin text-cyan-400 text-xl"></i> <span class="text-gray-400 ml-2">Processing uploaded files...</span>';
+
+    allData = [];
+    recipeData = [];
+
+    for (const file of files) {
+        const badge = document.createElement('span');
+        badge.className = 'file-badge';
+        badge.innerHTML = `<i class="fas fa-file-lines mr-2 text-gray-500"></i>${file.name}`;
+        fileListEl.appendChild(badge);
+
+        try {
+            const text = await file.text();
+            const isRecipeFile = file.name.toLowerCase().includes('recipe');
+            const parsed = parseDeviceLog(text, file.name, isRecipeFile);
+            
+            allData.push(...parsed);
+            badge.className = 'file-badge file-success';
+            badge.innerHTML = `<i class="fas fa-check-circle mr-2"></i>${file.name} <span class="ml-2 text-emerald-300">(${parsed.length})</span>`;
+        } catch (err) {
+            badge.className = 'file-badge file-error';
+            badge.innerHTML = `<i class="fas fa-exclamation-circle mr-2"></i>${file.name}`;
+            console.error(`Error parsing ${file.name}:`, err);
+        }
+    }
+
+    fileListEl.querySelector('.fa-circle-notch')?.parentElement?.remove();
+
+    if (allData.length === 0) {
+        fileListEl.innerHTML = '<span class="text-red-400"><i class="fas fa-exclamation-triangle mr-2"></i>No valid data found</span>';
+        return;
+    }
+
+    allData.sort((a, b) => a.timestamp - b.timestamp);
+    processRecipeSessions();
+    updateAllCharts();
+    updateIngredientsDisplay();
+}
+
+// ==================== LOG PARSER ====================
+function parseDeviceLog(content, filename, useRecipeParser) {
+    const lines = content.split('\n')
+        .map(l => l.trim())
+        .filter(l => l.length > 10 && l.includes(','));
+
+    const data = [];
+    let firstTimestamp = null;
+    const parser = useRecipeParser ? parseRecipeLogLine : parseManualLogLine;
+
+    for (const line of lines) {
+        const parsed = parser(line, filename, firstTimestamp);
+        if (parsed) {
+            if (firstTimestamp === null) firstTimestamp = parsed.timestamp;
+            data.push(parsed);
+        }
+    }
+
+    return data;
+}
+
+function parseRecipeLogLine(line, filename, firstTimestamp) {
+    try {
+        const parts = line.split(',').map(p => p.trim());
+        if (parts.length < 8) return null;
+
+        const timestamp = parseInt(parts[0], 10);
+        if (isNaN(timestamp)) return null;
+
+        const recipeName = parts[1] || 'Unknown';
+        const totalSteps = parseInt(parts[2], 10) || 1;
+        const currentStep = parseInt(parts[3], 10) || 1;
+
+        let indCurrent = 0, magCurrent = 0;
+        let indOnPower = 0, magOnPower = 0;
+        let voltage = CONFIG.DEFAULT_VOLTAGE;
+
+        for (let i = 4; i < parts.length; i++) {
+            const [key, val] = parts[i].split(':').map(s => s.trim());
+            if (key === 'Induction_current') indCurrent = parseFloat(val) || 0;
+            if (key === 'Magnetron_current') magCurrent = parseFloat(val) || 0;
+            if (key === 'IndOnPower') indOnPower = parseInt(val) || 0;
+            if (key === 'MagOnPower') magOnPower = parseInt(val) || 0;
+            if (key === 'Voltage' || key === 'indVoltage') {
+                voltage = parseInt(val) || CONFIG.DEFAULT_VOLTAGE;
+            }
+        }
+
+        const relativeSec = firstTimestamp ? timestamp - firstTimestamp : 0;
+        const timeStr = formatRelativeTime(relativeSec);
+
+        const indPower = indCurrent > CONFIG.INDUCTION_THRESHOLD ? CONFIG.IND_MAX_POWER * (indOnPower / 100) : 0;
+        const magPower = magCurrent > CONFIG.MAGNETRON_THRESHOLD ? CONFIG.MAG_MAX_POWER * (magOnPower / 100) : 0;
+        const totalPower = indPower + magPower;
+
+        return {
+            timestamp,
+            relativeSec,
+            timeStr,
+            filename,
+            logType: 'recipe',
+            recipeName,
+            totalSteps,
+            currentStep,
+            indCurrent,
+            magCurrent,
+            indPower,
+            magPower,
+            totalPower,
+            voltage,
+            indOnPower,
+            magOnPower,
+            mode: 1,
+            inductionActive: indCurrent > CONFIG.INDUCTION_THRESHOLD,
+            magnetronActive: magCurrent > CONFIG.MAGNETRON_THRESHOLD,
+            isRecipeMode: true,
+            isManualMode: false
+        };
+    } catch {
+        return null;
+    }
+}
+
+function updateVoltageDisplay() {
+    const peakVEl = document.getElementById('power-peak-voltage');
+    const lowVEl = document.getElementById('power-low-voltage');
+    
+    if (allData.length === 0) {
+        if (peakVEl) peakVEl.textContent = '— V';
+        if (lowVEl) lowVEl.textContent = '— V';
+        return;
+    }
+
+    const voltages = allData
+        .map(d => d.voltage)
+        .filter(v => v !== undefined && !isNaN(v) && v > 50);
+
+    if (voltages.length === 0) {
+        if (peakVEl) peakVEl.textContent = '— V';
+        if (lowVEl) lowVEl.textContent = '— V';
+        return;
+    }
+
+    const peak = Math.max(...voltages);
+    const low = Math.min(...voltages);
+
+    if (peakVEl) peakVEl.textContent = `${peak} V`;
+    if (lowVEl) lowVEl.textContent = `${low} V`;
+}
+
+function parseManualLogLine(line, filename, firstTimestamp) {
+    try {
+        const parts = line.split(',').map(p => p.trim());
+        if (parts.length < 10) return null;
+
+        const timestamp = parseInt(parts[0], 10);
+        if (isNaN(timestamp)) return null;
+
+        const relativeSec = firstTimestamp ? timestamp - firstTimestamp : 0;
+        const timeStr = formatRelativeTime(relativeSec);
+
+        const indCurrent = parseFloat(parts[3]) || 0;
+        const magCurrent = parseFloat(parts[4]) || 0;
+        const voltage = parseInt(parts[7]) || CONFIG.DEFAULT_VOLTAGE;
+
+        const inductionActive = indCurrent > CONFIG.INDUCTION_THRESHOLD;
+        const magnetronActive = magCurrent > CONFIG.MAGNETRON_THRESHOLD;
+
+        const indPower = inductionActive ? CONFIG.IND_MAX_POWER : 0;
+        const magPower = magnetronActive ? CONFIG.MAG_MAX_POWER : 0;
+        const totalPower = indPower + magPower;
+
+        return {
+            timestamp,
+            relativeSec,
+            timeStr,
+            filename,
+            logType: 'manual',
+            recipeName: 'Manual Operation',
+            indCurrent,
+            magCurrent,
+            indPower,
+            magPower,
+            totalPower,
+            voltage,
+            mode: 2,
+            inductionActive,
+            magnetronActive,
+            isRecipeMode: false,
+            isManualMode: true
+        };
+    } catch {
+        return null;
+    }
+}
+
+function formatRelativeTime(seconds) {
+    const abs = Math.abs(seconds);
+    if (abs < 3600) {
+        const m = Math.floor(abs / 60);
+        const s = abs % 60;
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+    const h = Math.floor(abs / 3600);
+    const m = Math.floor((abs % 3600) / 60);
+    return `${h}h ${m}m`;
+}
+
+// ==================== DATA PROCESSING ====================
+function processRecipeSessions() {
+    recipeData = [];
+    let currentSession = null;
+
+    for (const entry of allData) {
+        if (entry.logType !== 'recipe') continue;
+
+        const isNew = !currentSession ||
+            currentSession.recipeName !== entry.recipeName ||
+            (entry.timestamp - currentSession.lastTimestamp > 60);
+
+        if (isNew) {
+            if (currentSession) {
+                currentSession.duration = currentSession.lastTimestamp - currentSession.startTimestamp;
+                currentSession.completed = currentSession.lastStep >= currentSession.totalSteps;
+                recipeData.push(currentSession);
+            }
+            currentSession = {
+                recipeName: entry.recipeName,
+                startTimestamp: entry.timestamp,
+                lastTimestamp: entry.timestamp,
+                totalSteps: entry.totalSteps,
+                lastStep: entry.currentStep,
+                duration: 0,
+                completed: false
+            };
+        } else {
+            currentSession.lastTimestamp = entry.timestamp;
+            currentSession.lastStep = Math.max(currentSession.lastStep, entry.currentStep);
+        }
+    }
+
+    if (currentSession) {
+        currentSession.duration = currentSession.lastTimestamp - currentSession.startTimestamp;
+        currentSession.completed = currentSession.lastStep >= currentSession.totalSteps;
+        recipeData.push(currentSession);
+    }
+}
+
+// ==================== CLEAR & RESET ====================
+function clearAllData() {
+    allData = [];
+    recipeData = [];
+    aggregatedIngredients = {};
+    
+    Object.values(chartInstances).forEach(c => c?.destroy());
+    chartInstances = {};
+
+    const fileInput = document.getElementById('fileInput');
+    if (fileInput) fileInput.value = '';
+
+    document.getElementById('fileList').innerHTML = 
+        '<span class="text-gray-500 text-sm"><i class="fas fa-file-lines mr-2"></i>No data loaded. Use Reload or Upload Logs.</span>';
+
+    resetAllDisplays();
+    console.log("Dashboard cleared (recipes preserved)");
+}
+
+function resetAllDisplays() {
+    document.getElementById('kpi-runtime').textContent = '0s';
+    document.getElementById('kpi-completed').textContent = '0';
+    document.getElementById('kpi-aborted').textContent = '0';
+    document.getElementById('kpi-energy').textContent = '0 kWh';
+    document.getElementById('kpi-cost').textContent = '₹0';
+    document.getElementById('kpi-avgpower').textContent = '0 W';
+
+    ['induction','magnetron','recipe','manual','idle'].forEach(type => {
+        document.getElementById(`time-${type}`).textContent = '0s';
+        document.getElementById(`time-${type}-pct`).textContent = '0%';
+    });
+
+    document.getElementById('power-total-current').textContent = '0 A·h';
+    document.getElementById('power-ind-energy').textContent = '0 Wh';
+    document.getElementById('power-mag-energy').textContent = '0 Wh';
+    document.getElementById('power-peak').textContent = '0 W';
+    document.getElementById('stat-avg-ind').textContent = '0 A';
+    document.getElementById('stat-avg-mag').textContent = '0 A';
+
+    const peakV = document.getElementById('power-peak-voltage');
+    const lowV = document.getElementById('power-low-voltage');
+    if (peakV) peakV.textContent = '— V';
+    if (lowV) lowV.textContent = '— V';
+
+    document.getElementById('top-recipes').innerHTML = '<p class="text-gray-500 text-sm">No recipe data available</p>';
+    document.getElementById('recipe-time').innerHTML = '<p class="text-gray-500 text-sm">No recipe data available</p>';
+    document.getElementById('recipe-stats').innerHTML = '<p class="text-gray-500 text-sm">No recipe data available</p>';
+    document.getElementById('tableBody').innerHTML = '';
+    
+    // Reset ingredients display
+    document.getElementById('ing-total-items').textContent = '0';
+    document.getElementById('ing-matched').textContent = '0';
+    document.getElementById('ing-unmatched').textContent = '0';
+    document.getElementById('ingredients-container').innerHTML = '<p class="text-gray-500 text-sm text-center py-8"><i class="fas fa-info-circle mr-2"></i>No data loaded</p>';
+    document.getElementById('aggregated-ingredients').innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">No data loaded</td></tr>';
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ==================== UPDATE ALL ====================
+function updateAllCharts() {
+    if (!allData.length) return;
+
+    updateBusinessKPIs();
+    updateOperationalMetrics();
+    updateRecipeAnalytics();
+    updateCharts();
+    updateTable();
+    updateVoltageDisplay();
+}
+
+function updateCharts() {
+    Object.values(chartInstances).forEach(c => c?.destroy());
+    chartInstances = {};
+
+    const labels = allData.map(d => d.timeStr);
+
+    const recipeCount = {};
+    recipeData.forEach(r => {
+        recipeCount[r.recipeName] = (recipeCount[r.recipeName] || 0) + 1;
+    });
+
+    const topRecipes = Object.entries(recipeCount)
+        .sort((a,b)=>b[1]-a[1])
+        .slice(0,8);
+
+    if (topRecipes.length) {
+        chartInstances.recipe = new Chart(document.getElementById('recipeChart'), {
+            type: 'doughnut',
+            data: {
+                labels: topRecipes.map(([name]) => name.length > 18 ? name.substring(0,18)+'...' : name),
+                datasets: [{
+                    data: topRecipes.map(([,count]) => count),
+                    backgroundColor: ['#06b6d4','#f97316','#10b981','#8b5cf6','#ef4444','#3b82f6','#eab308','#ec4899'],
+                    borderColor: '#111827',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'right', labels: { boxWidth: 12 } } }
+            }
+        });
+    }
+
+    const op = calculateOperationalTime();
+    chartInstances.mode = new Chart(document.getElementById('modeChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Recipe Mode', 'Manual Mode', 'Idle'],
+            datasets: [{
+                data: [op.recipeModeSeconds, op.manualModeSeconds, op.idleSeconds],
+                backgroundColor: ['#3b82f6', '#10b981', '#374151'],
+                borderColor: '#111827',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'right', labels: { boxWidth: 12 } } }
+        }
+    });
+}
+
+function calculateOperationalTime() {
+    let induction = 0, magnetron = 0, recipe = 0, manual = 0, idle = 0;
+
+    allData.forEach(d => {
+        const interval = CONFIG.SAMPLE_INTERVAL;
+
+        if (d.inductionActive) induction += interval;
+        if (d.magnetronActive) magnetron += interval;
+        if (d.isRecipeMode) recipe += interval;
+        else if (d.isManualMode) manual += interval;
+        else idle += interval;
+    });
+
+    const total = allData.length * CONFIG.SAMPLE_INTERVAL;
+
+    return {
+        inductionSeconds: induction,
+        magnetronSeconds: magnetron,
+        recipeModeSeconds: recipe,
+        manualModeSeconds: manual,
+        idleSeconds: idle,
+        totalSeconds: total || 1
+    };
+}
+
+function formatDuration(s) {
+    if (s < 60) return `${s}s`;
+    if (s < 3600) {
+        const m = Math.floor(s/60);
+        const sec = s%60;
+        return sec ? `${m}m ${sec}s` : `${m}m`;
+    }
+    const h = Math.floor(s/3600);
+    const m = Math.floor((s%3600)/60);
+    return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+// ==================== KPI & METRICS ====================
+function updateBusinessKPIs() {
+    const rate = parseFloat(document.getElementById('electricityRate').value) || 6.5;
+    let totalEnergyWh = 0;
+    let peakPower = 0;
+    let totalIndCurrent = 0;
+    let totalMagCurrent = 0;
+
+    allData.forEach(d => {
+        totalEnergyWh += d.totalPower * (CONFIG.SAMPLE_INTERVAL / 3600);
+        peakPower = Math.max(peakPower, d.totalPower);
+        totalIndCurrent += d.indCurrent;
+        totalMagCurrent += d.magCurrent;
+    });
+
+    const energyKwh = totalEnergyWh / 1000;
+    const cost = energyKwh * rate;
+    const avgPower = allData.length ? totalEnergyWh / (allData.length * CONFIG.SAMPLE_INTERVAL / 3600) : 0;
+
+    const completed = recipeData.filter(r => r.completed).length;
+    const aborted = recipeData.length - completed;
+
+    document.getElementById('kpi-runtime').textContent = formatDuration(allData.length * CONFIG.SAMPLE_INTERVAL);
+    document.getElementById('kpi-completed').textContent = completed;
+    document.getElementById('kpi-aborted').textContent = aborted;
+    document.getElementById('kpi-energy').textContent = energyKwh.toFixed(2) + ' kWh';
+    document.getElementById('kpi-cost').textContent = '₹' + cost.toFixed(2);
+    document.getElementById('kpi-avgpower').textContent = avgPower.toFixed(0) + ' W';
+
+    const totalAh = (totalIndCurrent + totalMagCurrent) * (CONFIG.SAMPLE_INTERVAL / 3600);
+    const indEnergyWh = allData.reduce((sum, d) => sum + d.indPower * (CONFIG.SAMPLE_INTERVAL / 3600), 0);
+    const magEnergyWh = allData.reduce((sum, d) => sum + d.magPower * (CONFIG.SAMPLE_INTERVAL / 3600), 0);
+
+    document.getElementById('power-total-current').textContent = totalAh.toFixed(2) + ' A·h';
+    document.getElementById('power-ind-energy').textContent = indEnergyWh.toFixed(0) + ' Wh';
+    document.getElementById('power-mag-energy').textContent = magEnergyWh.toFixed(0) + ' Wh';
+    document.getElementById('power-peak').textContent = peakPower.toFixed(0) + ' W';
+    document.getElementById('stat-avg-ind').textContent = (totalIndCurrent / allData.length || 0).toFixed(2) + ' A';
+    document.getElementById('stat-avg-mag').textContent = (totalMagCurrent / allData.length || 0).toFixed(2) + ' A';
+}
+
+function updateCostCalculations() {
+    if (allData.length) updateBusinessKPIs();
+}
+
+function updateOperationalMetrics() {
+    const op = calculateOperationalTime();
+    const total = op.totalSeconds;
+
+    document.getElementById('time-induction').textContent = formatDuration(op.inductionSeconds);
+    document.getElementById('time-induction-pct').textContent = ((op.inductionSeconds/total)*100).toFixed(1)+'%';
+
+    document.getElementById('time-magnetron').textContent = formatDuration(op.magnetronSeconds);
+    document.getElementById('time-magnetron-pct').textContent = ((op.magnetronSeconds/total)*100).toFixed(1)+'%';
+
+    document.getElementById('time-recipe').textContent = formatDuration(op.recipeModeSeconds);
+    document.getElementById('time-recipe-pct').textContent = ((op.recipeModeSeconds/total)*100).toFixed(1)+'%';
+
+    document.getElementById('time-manual').textContent = formatDuration(op.manualModeSeconds);
+    document.getElementById('time-manual-pct').textContent = ((op.manualModeSeconds/total)*100).toFixed(1)+'%';
+
+    document.getElementById('time-idle').textContent = formatDuration(op.idleSeconds);
+    document.getElementById('time-idle-pct').textContent = ((op.idleSeconds/total)*100).toFixed(1)+'%';
+}
+
+function updateRecipeAnalytics() {
+    if (!recipeData.length) return;
+
+    const countMap = {};
+    const timeMap = {};
+    recipeData.forEach(r => {
+        countMap[r.recipeName] = (countMap[r.recipeName] || 0) + 1;
+        timeMap[r.recipeName] = (timeMap[r.recipeName] || 0) + r.duration;
+    });
+
+    const topCount = Object.entries(countMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const maxCount = topCount[0]?.[1] || 1;
+    document.getElementById('top-recipes').innerHTML = topCount.map(([name,c],i) => `
+        <div class="flex items-center gap-3">
+            <span class="text-lg font-bold text-gray-500 w-6">#${i+1}</span>
+            <div class="flex-1">
+                <div class="text-sm font-medium truncate">${name}</div>
+                <div class="h-1.5 bg-dark-600 rounded-full mt-1">
+                    <div class="h-full bg-gradient-to-r from-orange-500 to-red-500" style="width:${(c/maxCount)*100}%"></div>
+                </div>
+            </div>
+            <span class="text-sm font-bold text-orange-400">${c}x</span>
+        </div>
+    `).join('');
+
+    const topTime = Object.entries(timeMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const maxTime = topTime[0]?.[1] || 1;
+    document.getElementById('recipe-time').innerHTML = topTime.map(([name,t],i) => `
+        <div class="flex items-center gap-3">
+            <span class="text-lg font-bold text-gray-500 w-6">#${i+1}</span>
+            <div class="flex-1">
+                <div class="text-sm font-medium truncate">${name}</div>
+                <div class="h-1.5 bg-dark-600 rounded-full mt-1">
+                    <div class="h-full bg-gradient-to-r from-cyan-500 to-blue-500" style="width:${(t/maxTime)*100}%"></div>
+                </div>
+            </div>
+            <span class="text-sm font-bold text-cyan-400">${formatDuration(t)}</span>
+        </div>
+    `).join('');
+
+    const total = recipeData.length;
+    const completed = recipeData.filter(r=>r.completed).length;
+    const avgDuration = total ? recipeData.reduce((s,r)=>s+r.duration,0)/total : 0;
+
+    document.getElementById('recipe-stats').innerHTML = `
+        <div class="grid grid-cols-2 gap-4">
+            <div class="text-center p-3 bg-dark-700/50 rounded-lg">
+                <div class="text-2xl font-bold">${total}</div>
+                <div class="text-xs text-gray-500 uppercase">Total Sessions</div>
+            </div>
+            <div class="text-center p-3 bg-dark-700/50 rounded-lg">
+                <div class="text-2xl font-bold text-emerald-400">${total ? ((completed/total)*100).toFixed(0) : 0}%</div>
+                <div class="text-xs text-gray-500 uppercase">Success Rate</div>
+            </div>
+            <div class="text-center p-3 bg-dark-700/50 rounded-lg">
+                <div class="text-2xl font-bold text-cyan-400">${formatDuration(Math.round(avgDuration))}</div>
+                <div class="text-xs text-gray-500 uppercase">Avg Duration</div>
+            </div>
+            <div class="text-center p-3 bg-dark-700/50 rounded-lg">
+                <div class="text-2xl font-bold text-purple-400">${new Set(recipeData.map(r=>r.recipeName)).size}</div>
+                <div class="text-xs text-gray-500 uppercase">Unique Recipes</div>
+            </div>
+        </div>
+    `;
+}
+
+function updateTable() {
+    const tbody = document.getElementById('tableBody');
+    const recent = allData.slice(-100).reverse();
+
+    tbody.innerHTML = recent.map(d => {
+        const status = d.inductionActive && d.magnetronActive ? {text:'Both',cls:'text-purple-400'} :
+                       d.inductionActive ? {text:'Induction',cls:'text-cyan-400'} :
+                       d.magnetronActive ? {text:'Microwave',cls:'text-orange-400'} :
+                       {text:'Idle',cls:'text-gray-500'};
+
+        const mode = d.isRecipeMode ? {text:'Recipe',cls:'text-blue-400'} :
+                     d.isManualMode ? {text:'Manual',cls:'text-emerald-400'} :
+                     {text:'—',cls:'text-gray-500'};
+
+        return `
+            <tr class="hover:bg-dark-700/50 border-b border-dark-700 transition-colors">
+                <td class="px-3 py-2.5 font-mono text-xs text-gray-400">${d.timeStr}</td>
+                <td class="px-3 py-2.5 text-xs truncate max-w-[140px]" title="${d.recipeName}">${d.recipeName}</td>
+                <td class="px-3 py-2.5 font-mono text-xs text-gray-400">${d.totalSteps ? `${d.currentStep}/${d.totalSteps}` : '—'}</td>
+                <td class="px-3 py-2.5 font-mono ${d.inductionActive?'text-cyan-400 font-semibold':'text-gray-500'}">${d.indCurrent.toFixed(2)}</td>
+                <td class="px-3 py-2.5 font-mono ${d.magnetronActive?'text-orange-400 font-semibold':'text-gray-500'}">${d.magCurrent.toFixed(2)}</td>
+                <td class="px-3 py-2.5 font-mono text-gray-300">${Math.round(d.totalPower)}</td>
+                <td class="px-3 py-2.5 font-mono ${mode.cls}">${mode.text}</td>
+                <td class="px-3 py-2.5 font-semibold ${status.cls}">${status.text}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// ==================== EXPORT ====================
+function exportReport() {
+    if (allData.length === 0) {
+        alert('No data available to export.\nPlease ensure log files are loaded.');
+        return;
+    }
+
+    const rate = parseFloat(document.getElementById('electricityRate').value) || 6.5;
+
+    let totalEnergyWh = 0;
+    let peakPower = 0;
+
+    allData.forEach(d => {
+        totalEnergyWh += d.totalPower * (CONFIG.SAMPLE_INTERVAL / 3600);
+        peakPower = Math.max(peakPower, d.totalPower);
+    });
+
+    const energyKwh = totalEnergyWh / 1000;
+    const op = calculateOperationalTime();
+    const completed = recipeData.filter(r => r.completed).length;
+
+    const voltages = allData
+        .map(d => d.voltage)
+        .filter(v => Number.isFinite(v) && v > 50);
+
+    const peakV = voltages.length ? Math.max(...voltages) : 'N/A';
+    const minV = voltages.length ? Math.min(...voltages) : 'N/A';
+
+    // Build ingredients section
+    const ingredients = Object.values(aggregatedIngredients);
+    let ingredientsSection = '';
+    if (ingredients.length > 0) {
+        ingredientsSection = `
+AGGREGATED INGREDIENTS
+----------------------
+${ingredients
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(ing => `• ${ing.name}: ${ing.quantity.toFixed(1)} ${ing.unit} (${ing.runs}x runs)`)
+    .join('\n')}
+`;
+    }
+
+    const report = `
+On2Cook Analytics Report
+Generated: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+
+VOLTAGE READINGS
+----------------
+Peak Voltage:   ${peakV} V
+Lowest Voltage: ${minV} V
+
+SUMMARY
+-------
+Total Samples: ${allData.length}
+Total Runtime: ${formatDuration(op.totalSeconds)}
+Energy Consumed: ${energyKwh.toFixed(2)} kWh
+Electricity Cost: ₹${(energyKwh * rate).toFixed(2)}  (@ ₹${rate}/kWh)
+
+RECIPE STATISTICS
+-----------------
+Total Sessions: ${recipeData.length}
+Completed: ${completed}
+Aborted: ${recipeData.length - completed}
+Success Rate: ${recipeData.length ? ((completed / recipeData.length) * 100).toFixed(1) : 0}%
+
+OPERATIONAL TIME
+----------------
+Induction:  ${formatDuration(op.inductionSeconds)}  (${(op.inductionSeconds / op.totalSeconds * 100).toFixed(1)}%)
+Microwave:  ${formatDuration(op.magnetronSeconds)}  (${(op.magnetronSeconds / op.totalSeconds * 100).toFixed(1)}%)
+Recipe Mode: ${formatDuration(op.recipeModeSeconds)}  (${(op.recipeModeSeconds / op.totalSeconds * 100).toFixed(1)}%)
+Manual Mode: ${formatDuration(op.manualModeSeconds)}  (${(op.manualModeSeconds / op.totalSeconds * 100).toFixed(1)}%)
+Idle Time:  ${formatDuration(op.idleSeconds)}  (${(op.idleSeconds / op.totalSeconds * 100).toFixed(1)}%)
+
+TOP RECIPES (by count)
+----------------------
+${Object.entries(recipeData.reduce((acc, r) => {
+    acc[r.recipeName] = (acc[r.recipeName] || 0) + 1;
+    return acc;
+}, {}))
+    .sort(([,a], [,b]) => b - a)
+    .slice(0, 10)
+    .map(([name, count], i) => `${i + 1}. ${name}: ${count}x`)
+    .join('\n') || 'No recipe data available'}
+
+${ingredientsSection}
+Generated by On2Cook Analytics Platform
+    `.trim();
+
+    downloadFile(report, `on2cook-report-${new Date().toISOString().split('T')[0]}.txt`, 'text/plain');
+}
+</script>
+</body>
+</html>
