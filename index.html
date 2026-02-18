@@ -442,6 +442,7 @@ const PRELOADED_RECIPES = [
     'BUTTER CHICKEN.txt',
     'CHICKEN CURRY.txt',
     'TOMATO SOUP.txt',
+    "WHITE SAUCE PASTA.txt",
     // 'DAL_MAKHANI.txt',
 ];
 
@@ -761,7 +762,45 @@ function updateIngredientsDisplay() {
                         aggregatedIngredients[key].runs += runCount;
                     });
                 }
-            });
+            });ingredients.forEach(step => {
+                    let items = [];
+                    if (step.text && step.text.trim()) {
+                        items = parseIngredientText(step.text);
+                    } else {
+                        const name = (step.audioI || step.title || '').trim();
+                        const quantity = parseFloat(step.audioQ) || 0;
+                        const unit = (step.audioU || 'g').toLowerCase()
+                            .replace('gm', 'g').replace(/ml/i, 'ml');
+                        if (name && name.toLowerCase() !== 'water') {
+                            items = [{ name, quantity, unit }];
+                        }
+                    }
+
+                    items.forEach(item => {
+                        parsedIngredients.push({
+                            step: step.title || step.audioI || `Step ${step.id}`,
+                            ...item
+                        });
+
+                        const normalizedName = normalizeIngredientName(item.name);
+                        const unit = normalizeUnit(item.unit);
+                        const key = `${normalizedName}|${unit}`;
+
+                        if (!aggregatedIngredients[key]) {
+                            aggregatedIngredients[key] = {
+                                name: item.name,
+                                quantity: 0,
+                                unit: unit,
+                                recipes: new Set(),
+                                runs: 0
+                            };
+                        }
+
+                        aggregatedIngredients[key].quantity += item.quantity * runCount;
+                        aggregatedIngredients[key].recipes.add(recipeName);
+                        aggregatedIngredients[key].runs += runCount;
+                    });
+                });
             
             html += `
                 <div class="ingredient-card" data-recipe="${recipeName}">
